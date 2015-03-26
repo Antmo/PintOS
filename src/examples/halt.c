@@ -9,7 +9,8 @@
 int
 main (void)
 {
-  exit (1);
+  exit (42);
+  exit (55);
   halt ();
   /* not reached */
 }

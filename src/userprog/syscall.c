@@ -49,10 +49,16 @@ syscall_handler (struct intr_frame *f)
   
   switch ( *esp ) {
   case SYS_HALT:
-    m_halt();
+    sys_halt();
     break;
   case SYS_EXIT:
-    m_exit(esp[1]);
+    sys_exit(esp[1], f);
+    break;
+  case SYS_READ:
+    sys_read(esp[1],(char*)esp[2],esp[3], f);
+    break;
+  case SYS_WRITE:
+    sys_write(esp[1],(const char*)esp[2],esp[3], f);
     break;
   default:
     printf ("Executed an unknown system call!\n");
@@ -64,14 +70,63 @@ syscall_handler (struct intr_frame *f)
 }
 
 void
-m_halt(void)
+sys_halt(void)
 {
   power_off();
 }
 
 void
-m_exit(int status)
+sys_exit(int status, struct intr_frame* f)
 {
+  /* get the current running thread */
+  struct thread* tid = thread_current();
   printf("\n exit_status: %d\n",status);
-  /* TODO ...*/
+  printf("\n this is the current running thread: %s\n",tid->name);
+  
+  f->eax = status;
+  thread_exit();  
+}
+
+/*
+ * Reads up to length characters and stores them in @buffer
+ */
+void
+sys_read(int fd, char *buffer, unsigned length, struct intr_frame* f)
+{
+  if ( fd != STDIN_FILENO )
+    {
+      f->eax = -1;
+      return;
+    }
+  
+  uint8_t ch;
+  unsigned i;
+
+  memset(buffer,0,length);
+
+  for ( i = 0; i < length; ++i )
+    {
+      ch = input_getc();
+      if ( ch == '\r')
+	ch = '\n';
+      buffer[i] = ch;
+      putbuf(buffer+i,1);
+    }
+  f->eax = i;
+  return; // or return length?
+}
+
+void
+sys_write(int fd, const char *buffer, unsigned length, struct intr_frame* f)
+{
+  if(fd != STDOUT_FILENO) 
+    {
+      f->eax = -1;
+      return;
+    }
+
+  putbuf(buffer,length);
+
+  f->eax = length;
+  return;
 }
