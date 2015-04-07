@@ -115,6 +115,7 @@ init_thread (struct thread *t, const char *name, int priority)
   t->magic = THREAD_MAGIC;
 
   /* YES! You may want add stuff here. */
+  map_init(&t->file_list);
 }
 
 /* Starts preemptive thread scheduling by enabling interrupts.

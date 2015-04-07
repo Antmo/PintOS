@@ -7,6 +7,11 @@ void sys_halt(void);                                             // Shutdown the
 void sys_exit(int, struct intr_frame*);                          // Exit current thread
 void sys_read(int, char*, unsigned, struct intr_frame*);         // 
 void sys_write(int, const char*, unsigned, struct intr_frame*);  // 
-
-
+void sys_open(const char*, struct intr_frame*);
+void sys_close(int);
+void sys_remove(const char*, struct intr_frame*);
+void sys_create(const char*, unsigned, struct intr_frame*);
+void sys_seek(int, unsigned);
+void sys_tell(int, struct intr_frame*);
+void sys_filesize(int, struct intr_frame*);
 #endif /* userprog/syscall.h */

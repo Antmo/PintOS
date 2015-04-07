@@ -1,6 +1,3 @@
-#ifndef _MAP_H_
-#define _MAP_H_
-
 /* Place functions to handle a process open files here (file list).
    
    flist.h : Your function declarations and documentation.
@@ -30,6 +27,28 @@
    track of, to guarantee ALL open files are eventyally CLOSED
    (probably when removed from the list(s)).
  */
+#ifndef _MAP_H_
+#define _MAP_H_
+#define MAP_SIZE 128
+#define RESERVED 2
 
+#include "filesys/file.h"
+#include <stdbool.h>
+
+typedef struct file* value_t;
+
+typedef int key_t;
+
+
+struct map {
+  value_t content[MAP_SIZE];
+};
+
+void     map_init      (struct map*);
+key_t    map_insert    (struct map*, value_t);
+value_t  map_find      (struct map*, int);
+value_t  map_remove    (struct map*, int);
+void     map_for_each  (struct map*, void (*exec)(int,value_t,int), int);
+void     map_remove_if (struct map*, bool (*cond)(int,value_t,int), int);
 
 #endif

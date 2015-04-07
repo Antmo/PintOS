@@ -60,6 +60,27 @@ syscall_handler (struct intr_frame *f)
   case SYS_WRITE:
     sys_write(esp[1],(const char*)esp[2],esp[3], f);
     break;
+  case SYS_OPEN:
+    sys_open((const char *)esp[1],f);
+    break;
+  case SYS_CLOSE:
+    sys_close(esp[1]);
+    break;
+  case SYS_REMOVE:
+    sys_remove((const char*)esp[1], f);
+    break;
+  case SYS_CREATE:
+    sys_create((const char *)esp[1],esp[2],f);
+    break;
+  case SYS_TELL:
+    sys_tell(esp[1],f);
+    break;
+  case SYS_SEEK:
+    sys_seek(esp[1],esp[2]);
+    break;
+  case SYS_FILESIZE:
+    sys_filesize(esp[1],f);
+    break;
   default:
     printf ("Executed an unknown system call!\n");
     printf ("Stack top + 0: %d\n", esp[0]);
@@ -93,40 +114,131 @@ sys_exit(int status, struct intr_frame* f)
 void
 sys_read(int fd, char *buffer, unsigned length, struct intr_frame* f)
 {
-  if ( fd != STDIN_FILENO )
+  if (fd == STDOUT_FILENO)
     {
       f->eax = -1;
       return;
     }
-  
-  uint8_t ch;
-  unsigned i;
 
-  memset(buffer,0,length);
-
-  for ( i = 0; i < length; ++i )
+  if (fd == STDIN_FILENO )
     {
-      ch = input_getc();
-      if ( ch == '\r')
-	ch = '\n';
-      buffer[i] = ch;
-      putbuf(buffer+i,1);
+      uint8_t ch;
+      unsigned i;
+
+      memset(buffer,0,length);
+      for ( i = 0; i < length; ++i )
+	{
+	  ch = input_getc();
+	  if ( ch == '\r')
+	    ch = '\n';
+	  buffer[i] = ch;
+	  putbuf(buffer+i,1);
+	}
+      f->eax = i;
     }
-  f->eax = i;
-  return; // or return length?
+  else
+    {
+      struct file* fp = map_find(&(thread_current()->file_list), fd);
+      if (fp == NULL)
+	f->eax = -1;
+      else
+	f->eax = file_read(fp, buffer, length);
+    }
+  
+  return;
 }
 
 void
 sys_write(int fd, const char *buffer, unsigned length, struct intr_frame* f)
 {
-  if(fd != STDOUT_FILENO) 
+  if(fd == STDIN_FILENO) 
     {
       f->eax = -1;
       return;
     }
-
-  putbuf(buffer,length);
-
+  else if (fd == STDOUT_FILENO)
+    putbuf(buffer,length);
+  else
+    {
+      struct file* fp = map_find(&(thread_current()->file_list),fd);
+      if ( fp == NULL )
+	{
+	  f->eax = -1;
+	  return;
+	}
+      file_write( fp, buffer, length);
+    }
+  
   f->eax = length;
   return;
+}
+
+void
+sys_open(const char * filename, struct intr_frame* f)
+{
+  struct thread* ct = thread_current();
+  struct file* fp = NULL;
+  
+  fp = filesys_open(filename);
+  
+  if(fp != NULL)
+    f->eax = map_insert(&ct->file_list, fp);
+  else
+    f->eax = -1;
+  
+  return;
+}
+
+void
+sys_create(const char* filename, unsigned size, struct intr_frame * f)
+{
+  f->eax = filesys_create(filename,size);
+}
+
+void
+sys_close(int fd)
+{
+  
+  struct file* fp = map_find(&(thread_current()->file_list),fd);
+  if ( fp != NULL)
+   {
+    filesys_close(fp);
+    map_remove(&(thread_current()->file_list),fd);
+   }
+}
+
+void
+sys_remove(const char* filename, struct intr_frame* f)
+{
+  f->eax = filesys_remove(filename);
+}
+
+void
+sys_seek(int fd, unsigned position)
+{
+  struct file* fp = map_find(&(thread_current()->file_list),fd);
+  if ( fp != NULL )
+      file_seek(fp, position);
+}
+
+void
+sys_tell(int fd, struct intr_frame* f)
+{
+  struct file* fp = map_find(&(thread_current()->file_list), fd);
+  
+  if ( fp != NULL )
+    f->eax = file_tell(fp);
+  else
+    f->eax = -1;
+}
+
+void
+sys_filesize(int fd, struct intr_frame* f)
+{
+  struct file* fp = map_find(&(thread_current()->file_list), fd);
+  
+  if ( fp != NULL )
+    f->eax = file_length(fp);
+  else
+    f->eax = -1;
 }
