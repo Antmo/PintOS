@@ -236,6 +236,10 @@ process_cleanup (void)
    * that may sometimes poweroff as soon as process_wait() returns,
    * possibly before the prontf is completed.)
    */
+
+  /* Clear the file list */
+  map_clear(&(cur->file_list));
+
   printf("%s: exit(%d)\n", thread_name(), status);
   
   /* Destroy the current process's page directory and switch back

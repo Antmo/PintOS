@@ -28,17 +28,6 @@ map_insert(struct map* m, value_t t)
 	}
     }
 
-  /*
-   *  Return -1 here to indicate failure?
-   *  As the key '-1' won't exist in our map ...
-   *  I dunno. If we get buffer overflow it will
-   *  result in memory leaks (i.e we call PANIC()) 
-   *  I mean, who's gonna be doing the cleanup? PintOS?
-   *  No ... this exists in kernel space, it's our responsibility.
-   *  With great power comes great responsibility ...
-   *  I want to use C++ >:(
-   */
-
   return -1;
 }
 
@@ -57,9 +46,10 @@ map_remove(struct map* m, int i)
   if(i >= 0 && i < MAP_SIZE && m->content[i] != NULL)
     {
       value_t temp = m->content[i];
-      //memcpy(temp, m->content[i], sizeof(value_t));
-      //free(m->content[i]); // PAAANIC ATM
+      
       m->content[i] = NULL;
+      file_close(m->content[i]);
+
       return temp;
     }
   else
@@ -82,5 +72,16 @@ map_remove_if(struct map* m, bool (*cond)(int,value_t,int), int aux)
 {
   unsigned i;
   for(i = 0; i < MAP_SIZE; ++i)
-    cond(i, m->content[i], aux);
+    { 
+      if ( cond(i, m->content[i], aux) )
+	map_remove(m,i);
+    }
+}
+
+void
+map_clear(struct map* m)
+{
+  unsigned i;
+  for ( i = 0; i < MAP_SIZE; ++i )
+    map_remove(m,i);
 }

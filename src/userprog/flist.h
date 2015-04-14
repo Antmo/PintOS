@@ -50,5 +50,7 @@ value_t  map_find      (struct map*, int);
 value_t  map_remove    (struct map*, int);
 void     map_for_each  (struct map*, void (*exec)(int,value_t,int), int);
 void     map_remove_if (struct map*, bool (*cond)(int,value_t,int), int);
+void     map_clear     (struct map*);
+
 
 #endif

@@ -101,8 +101,12 @@ sys_exit(int status, struct intr_frame* f)
 {
   /* get the current running thread */
   struct thread* tid = thread_current();
+ 
   printf("\n exit_status: %d\n",status);
   printf("\n this is the current running thread: %s\n",tid->name);
+  
+  /* close all open files in the open filelist */
+  map_clear(&(tid->file_list));
   
   f->eax = status;
   thread_exit();  
@@ -157,7 +161,10 @@ sys_write(int fd, const char *buffer, unsigned length, struct intr_frame* f)
       return;
     }
   else if (fd == STDOUT_FILENO)
-    putbuf(buffer,length);
+    {
+      putbuf(buffer,length);
+      f->eax = length;
+    }
   else
     {
       struct file* fp = map_find(&(thread_current()->file_list),fd);
@@ -166,11 +173,10 @@ sys_write(int fd, const char *buffer, unsigned length, struct intr_frame* f)
 	  f->eax = -1;
 	  return;
 	}
-      file_write( fp, buffer, length);
-    }
+      f->eax = file_write( fp, buffer, length);
+     }
   
-  f->eax = length;
-  return;
+   return;
 }
 
 void
@@ -181,11 +187,17 @@ sys_open(const char * filename, struct intr_frame* f)
   
   fp = filesys_open(filename);
   
-  if(fp != NULL)
-    f->eax = map_insert(&ct->file_list, fp);
+  if( fp != NULL )
+    {
+      int result = map_insert(&ct->file_list, fp);
+      f->eax = result;
+
+      if ( result == -1 )  
+	file_close(fp);
+    }
   else
     f->eax = -1;
-  
+
   return;
 }
 
@@ -200,7 +212,7 @@ sys_close(int fd)
 {
   
   struct file* fp = map_find(&(thread_current()->file_list),fd);
-  if ( fp != NULL)
+  if ( fp != NULL )
    {
     filesys_close(fp);
     map_remove(&(thread_current()->file_list),fd);
