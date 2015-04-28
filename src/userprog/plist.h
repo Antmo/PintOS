@@ -28,6 +28,42 @@
      clean, readable format.
      
  */
+#define LIST_SIZE 128
 
+#include <stdbool.h>
+#include "threads/synch.h"
+
+struct pinfos;
+typedef struct pinfos* value_p;
+typedef int key_t;
+
+struct pinfos {
+  //bool free; //the fuck is this?
+  // pid proc_id; // isnt this our index ?
+  int   parent_id; // I am the spawn of this fellow
+  int   exit_status; // this is how I died
+  char* name;
+  bool  alive; // I am beyond the realm of the living, or am I ?
+  bool  parent_alive; // I am an orphan, or just a melodramatic kid ?
+  struct semaphore exit_status_available;
+};
+
+struct plist {
+  value_p content[LIST_SIZE];
+  struct lock phatlock;
+};
+
+void     plist_init       (struct plist*);
+key_t    plist_insert     (struct plist*, value_p);
+value_p  plist_find       (struct plist*, int);
+value_p  plist_remove     (struct plist*, int);
+bool     plist_alive      (struct plist*, int);
+int      plist_get_status (struct plist*, int);
+
+/*
+void     map_for_each  (struct map*, void (*exec)(int,value_t,int), int);
+void     map_remove_if (struct map*, bool (*cond)(int,value_t,int), int);
+void     map_clear     (struct map*);
+*/
 
 #endif

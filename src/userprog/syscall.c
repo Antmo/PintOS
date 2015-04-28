@@ -16,7 +16,6 @@
 
 static void syscall_handler (struct intr_frame *);
 
-
 void
 syscall_init (void) 
 {
@@ -54,6 +53,18 @@ syscall_handler (struct intr_frame *f)
   case SYS_EXIT:
     sys_exit(esp[1], f);
     break;
+  case SYS_EXEC:
+    sys_exec((char*)esp[1], f);
+    break;
+  case SYS_PLIST:
+    sys_plist();
+    break;
+  case SYS_SLEEP:
+    sys_sleep(esp[1]);
+    break;
+  case SYS_WAIT:
+    sys_wait(esp[1], f);
+    break;
   case SYS_READ:
     sys_read(esp[1],(char*)esp[2],esp[3], f);
     break;
@@ -82,9 +93,9 @@ syscall_handler (struct intr_frame *f)
     sys_filesize(esp[1],f);
     break;
   default:
-    printf ("Executed an unknown system call!\n");
-    printf ("Stack top + 0: %d\n", esp[0]);
-    printf ("Stack top + 1: %d\n", esp[1]);
+    printf ("# Executed an unknown system call!\n");
+    printf ("# Stack top + 0: %d\n", esp[0]);
+    printf ("# Stack top + 1: %d\n", esp[1]);
       
     thread_exit ();
   }
@@ -102,14 +113,41 @@ sys_exit(int status, struct intr_frame* f)
   /* get the current running thread */
   struct thread* tid = thread_current();
  
-  printf("\n exit_status: %d\n",status);
-  printf("\n this is the current running thread: %s\n",tid->name);
+  /* printf("# sys_exit() ENTERED\n"); */
+  /* printf("# exit_status: %d\n",status); */
+  /* printf("# this is the current running thread: %s\n",tid->name); */
   
   /* close all open files in the open filelist */
   map_clear(&(tid->file_list));
   
   f->eax = status;
-  thread_exit();  
+
+  process_exit(status); /* Update process list */
+  thread_exit();
+}
+
+void
+sys_sleep(int millis)
+{
+  timer_sleep(millis);
+}
+
+void
+sys_wait(int pid, struct intr_frame* f)
+{
+  f->eax = process_wait(pid);
+}
+
+void
+sys_exec(const char* command_line, struct intr_frame* f)
+{
+  f->eax = process_execute(command_line);
+}
+
+void
+sys_plist(void)
+{
+  process_print_list();
 }
 
 /*
@@ -155,7 +193,8 @@ sys_read(int fd, char *buffer, unsigned length, struct intr_frame* f)
 void
 sys_write(int fd, const char *buffer, unsigned length, struct intr_frame* f)
 {
-  if(fd == STDIN_FILENO) 
+  
+  if(fd == STDIN_FILENO /*|| buffer == NULL */) 
     {
       f->eax = -1;
       return;
