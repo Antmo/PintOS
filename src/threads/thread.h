@@ -96,6 +96,7 @@ struct thread
 
     /* YES! You may want to add stuff. But make note of point 2 above. */
     struct map file_list;             /* File descriptors for processes' open files */
+    int pid;                          /* This threads process id */
 #ifdef USERPROG
     /* Owned by userprog/process.c. */
     uint32_t *pagedir;                  /* Page directory. */

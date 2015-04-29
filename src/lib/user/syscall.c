@@ -81,6 +81,17 @@ exec (const char *file)
   return (pid_t) syscall1 (SYS_EXEC, file);
 }
 
+void
+plist(void)
+{
+  return syscall0 (SYS_PLIST);
+}
+
+void
+sleep(int millis)
+{
+  return syscall1(SYS_SLEEP, millis);
+}
 int
 wait (pid_t pid)
 {

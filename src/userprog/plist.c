@@ -6,6 +6,7 @@
 #include <stdlib.h>
 #include "threads/malloc.h"
 #include <string.h>
+ 
 
 void 
 plist_init(struct plist* m)
@@ -39,7 +40,8 @@ plist_insert(struct plist* m, value_p t)
 	  m->content[i]->alive = t->alive;
 	  m->content[i]->parent_alive = t->parent_alive;
 	  m->content[i]->exit_status = t->exit_status;
-	  
+	  m->content[i]->garbage = t->garbage;
+
 	  m->content[i]->exit_status_available = t->exit_status_available;
 	  sema_init(&m->content[i]->exit_status_available, 0 );
 	  lock_release(&m->phatlock); /* LOCK */
@@ -105,34 +107,77 @@ int
 plist_get_status(struct plist* m, int i)
 {
   lock_acquire(&m->phatlock); /* LOCK */
-  int status = m->content[i]->exit_status;
+  int status;
+  if(m->content[i] != NULL)
+    status = m->content[i]->exit_status;
+  else
+    status = -1;
   lock_release(&m->phatlock);
   return status;
 }
 
-/*
+
 void
-map_for_each(struct map* m, void (*exec)(int,value_t,int), int aux)
+plist_for_each(struct plist* m, void (*exec)(int,value_p,int), int aux)
 {
   unsigned i;
-  for(i = 0; i < MAP_SIZE; ++i)
+  for(i = 0; i < LIST_SIZE; ++i)
     {
+      lock_acquire(&m->phatlock);
       if(m->content[i] != NULL)
 	exec(i, m->content[i], aux);
+      lock_release(&m->phatlock);
     }
 }
+
 
 void
-map_remove_if(struct map* m, bool (*cond)(int,value_t,int), int aux)
+plist_remove_if(struct plist* m, bool (*cond)(int,value_p,int), int aux)
 {
+ 
   unsigned i;
-  for(i = 0; i < MAP_SIZE; ++i)
-    { 
-      if ( cond(i, m->content[i], aux) )
-	map_remove(m,i);
+  for(i = 0; i < LIST_SIZE; ++i)
+    {
+      lock_acquire(&m->phatlock); 
+      if ( m->content[i] != NULL && cond(i, m->content[i], aux) )
+	{
+	  lock_release(&m->phatlock);
+	  plist_remove(m,i);
+	  continue;
+	}
+      lock_release(&m->phatlock);
     }
 }
 
+bool
+is_candidate(int i, value_p p, int aux)
+{
+  if( !(p->parent_alive || p->alive) )
+    return true;
+
+  return false;
+}
+
+/*
+ * Danger! This function is supposed to be used ONLY if 
+ * parent (aux) is dead AND parent (aux) is still in the list.
+ * If that is not the case aux could potentially be a new process
+ * with own children not at all related to the original aux
+ */
+void
+update_parent(int i, value_p p, int aux)
+{
+  if( p->parent_id == aux )
+    p->parent_alive = false;
+  
+  if( !(p->alive && p->parent_alive) )
+    p->garbage = true;
+
+  if( i == aux )
+    p->alive = false;
+}
+
+/*
 void
 map_clear(struct map* m)
 {

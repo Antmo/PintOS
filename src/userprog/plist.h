@@ -38,8 +38,7 @@ typedef struct pinfos* value_p;
 typedef int key_t;
 
 struct pinfos {
-  //bool free; //the fuck is this?
-  // pid proc_id; // isnt this our index ?
+  bool  garbage; //the fuck is this?
   int   parent_id; // I am the spawn of this fellow
   int   exit_status; // this is how I died
   char* name;
@@ -60,10 +59,13 @@ value_p  plist_remove     (struct plist*, int);
 bool     plist_alive      (struct plist*, int);
 int      plist_get_status (struct plist*, int);
 
-/*
-void     map_for_each  (struct map*, void (*exec)(int,value_t,int), int);
-void     map_remove_if (struct map*, bool (*cond)(int,value_t,int), int);
-void     map_clear     (struct map*);
-*/
+
+void     plist_for_each  (struct plist*, void (*exec)(int,value_p,int), int);
+void     plist_remove_if (struct plist*, bool (*cond)(int,value_p,int), int);
+//void     map_clear     (struct map*);
+
+bool is_candidate(int, value_p, int);
+void update_parent(int, value_p, int);
+
 
 #endif

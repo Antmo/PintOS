@@ -45,6 +45,8 @@ void process_exit(int status)
   struct plist* p = &PROCESS_LIST;
   int pid = thread_current()->pid;
   //  bool parent_alive = p->content[pid]->parent_alive;
+  if(p->content[pid] == NULL)
+    printf("### p->content[pid] IS NULL!!!\n");
   p->content[pid]->exit_status = status;
   p->content[pid]->alive = false;
 }
@@ -198,6 +200,7 @@ start_process (struct parameters_to_start_process* parameters)
   temp.name = thread_current()->name;
   temp.alive = true;
   temp.parent_alive = true;
+  temp.garbage = false;
   
 
   /* debug("#before inserting into PROCESS_LIST\n"); */ 
@@ -207,7 +210,8 @@ start_process (struct parameters_to_start_process* parameters)
   /* Check if list was full, we do not allow more than LIST_SIZE processes to run concurrently */
   if(thread_current()->pid == -1)
     {
-      success = false; 
+      success = false;
+      parameters->load = false;
       debug("# ERROR: System-wide file list was full, killing thread\n");
     }
   
@@ -272,45 +276,26 @@ process_wait (int child_id)
   /* is this really our child ? */
   /* very bettifull kode  */
 
-  if( p->content[child_id] == NULL )          /* Guard ourselves */
-    return status;
+  lock_acquire(&p->phatlock);
+  if ( ( p->content[child_id] == NULL )          /* Guard ourselves */
+       ||
+       (!p->content[child_id]->parent_alive)    /* This isn't our child */
+       || 
+       (p->content[child_id]->parent_id != pid) /* We're not the parent*/
+       || 
+       (p->content[child_id]->garbage) ) 
+    {
+      lock_release(&p->phatlock);
+      return status;
+    }
 
-  if (!p->content[child_id]->parent_alive)    /* This isn't our child */
-    return status; 
-  
-  if (p->content[child_id]->parent_id != pid) /* We're not the parent*/
-    return status; 
-
-
+  lock_release(&p->phatlock);
+ 
   /* wait for our child to die >:) */
   sema_down(&p->content[child_id]->exit_status_available);
 
   status = plist_get_status(p,child_id);
-
-  /* remove child */
-  /* printf("### REMOVING CHILD\n"); */
-
-  lock_acquire(&p->phatlock);
-  int i;
-  for(i = 0; i < LIST_SIZE; ++i)
-    {
-      if( p->content[i] == NULL )
-	continue;
-
-      if( p->content[i]->parent_id == child_id )             /* Find potential children */
-	p->content[i]->parent_alive = false;            /* Let them know we died */
-
-      if( p->content[i]->parent_alive )                /* If child has parents still alive, skip */
-	continue;
-
-      if( !plist_alive(&PROCESS_LIST, i) && i != child_id )  /* Remove dead orphans*/
-	plist_remove(&PROCESS_LIST, i);
-
-    }
-  lock_release(&p->phatlock);
-  plist_remove(p, child_id);
-
-  /* printf("### CHILD REMOVED\n"); */
+  p->content[child_id]->garbage = true;
 
   debug("# %s#%d: process_wait(%d) RETURNS %d\n",
         cur->name, cur->tid, child_id, status);
@@ -334,10 +319,11 @@ void
 process_cleanup (void)
 {
   struct thread*  cur = thread_current ();
-  struct plist*   pl  = &PROCESS_LIST;
+  struct plist*   p   = &PROCESS_LIST;
   uint32_t*       pd  = cur->pagedir;
   int             pid = cur->pid;
-  int             status = plist_get_status(pl, pid);
+  printf("###pid: %d\n", pid);
+  int             status = plist_get_status(p, pid);
   
   
   debug("# %s#%d: process_cleanup() ENTERED\n", cur->name, cur->tid);
@@ -354,40 +340,17 @@ process_cleanup (void)
   /* Let parent process know that exit status is available */
   /* This child wont be removed from the process list if parent is waiting */
 
-
-  /* Remove dead orphans */
-  int i;
-  for(i = 0; i < LIST_SIZE; ++i)
-    {
-      if( pl->content[i] == NULL )
-	continue;
-
-      if( pl->content[i]->parent_id == pid )             /* Find potential children */
-	pl->content[i]->parent_alive = false;            /* Let them know we died */
-
-      if( pl->content[i]->parent_alive )                /* If child has parents still alive, skip */
-      	continue;
-
-      if( !plist_alive(&PROCESS_LIST, i) && i != pid )  /* Remove dead orphans*/
-	plist_remove(&PROCESS_LIST, i);
-    }
-
   /* Clear the file list */
   map_clear(&(cur->file_list));
 
-  /* THIS BE CRASHING !!!*/
-  if(pl->content[pid] == NULL)
-    printf("### pl->content[pid] IS DA NULL\n");
+  if ( pid != -1 ) /* How to deal with threads that are not processes? */
+    {
+      /* Let parent process know we're done */  
+      sema_up(&p->content[pid]->exit_status_available);
 
-  /* Let parent process know we're done */  
-  sema_up(&pl->content[pid]->exit_status_available);
-
-  /* Remove ourselves */
-  if( !pl->content[pid]->parent_alive )
-    plist_remove(&PROCESS_LIST, pid);         
-  
-
-
+      plist_for_each(p,&update_parent, pid);
+      plist_remove_if(p,&is_candidate, pid);
+    }
 
   printf("%s: exit(%d)\n", thread_name(), status);
 
