@@ -44,35 +44,22 @@ void process_exit(int status)
 {
   struct plist* p = &PROCESS_LIST;
   int pid = thread_current()->pid;
+
+  set_exit_status(p, status, pid);
+
   //  bool parent_alive = p->content[pid]->parent_alive;
-  if(p->content[pid] == NULL)
-    printf("### p->content[pid] IS NULL!!!\n");
-  p->content[pid]->exit_status = status;
-  p->content[pid]->alive = false;
+  //  if(p->content[pid] == NULL)
+  //    printf("### p->content[pid] IS NULL!!!\n");
+  //  p->content[pid]->exit_status = status;
+  //  p->content[pid]->alive = false;
 }
 
 /* Print a list of all running processes. The list shall include all
  * relevant debug information in a clean, readable format. */
 void process_print_list()
 {
-  int i;
   struct plist* p = &PROCESS_LIST;
-
-  printf("top\n");
-  printf("PID\tPARENTID\tALIVE\tPARENT_ALIVE\tEXIT_STATUS\tNAME\n");
-    for(i = 0; i < LIST_SIZE; ++i)
-      {
-	if(p->content[i] == NULL)
-	  continue;
-	
-	printf("%d\t%d\t\t%d\t%d\t\t\%d\t\t%s\n",
-	       i, 
-	       p->content[i]->parent_id, 
-	       p->content[i]->alive,
-	       p->content[i]->parent_alive,
-	       p->content[i]->exit_status,
-	       p->content[i]->name );
-      }
+  print_list(p);
 }
 
 
@@ -133,11 +120,15 @@ process_execute (const char *command_line)
   /* SCHEDULES function `start_process' to run (LATER) */
   thread_id = thread_create (debug_name, PRI_DEFAULT,
                              (thread_func*)start_process, &arguments);
-  process_id = thread_id;
-
+  
   /* If thread_create was successful, wait for child process */
-  if(process_id != -1)
-    sema_down(&arguments.sema);
+  if(thread_id != -1)
+    {
+      sema_down(&arguments.sema);
+      process_id = arguments.par_id;
+    }
+  /* is not really the parent id anymore lol just convenient */
+  
 
   /* AVOID bad stuff by turning off. YOU will fix this! */
   //power_off();
@@ -172,7 +163,7 @@ start_process (struct parameters_to_start_process* parameters)
   char file_name[64];
   strlcpy_first_word (file_name, parameters->command_line, 64);
   
-  debug("# %s#%d: start_process(\"%s\") ENTERED\n",
+  debug("%s#%d: start_process(\"%s\") ENTERED\n",
         thread_current()->name,
         thread_current()->tid,
         parameters->command_line);
@@ -187,7 +178,7 @@ start_process (struct parameters_to_start_process* parameters)
 
   parameters->load = success;
 
-  debug("# %s#%d: start_process(...): load returned %d\n",
+  debug("%s#%d: start_process(...): load returned %d\n",
         thread_current()->name,
         thread_current()->tid,
         success);
@@ -206,12 +197,14 @@ start_process (struct parameters_to_start_process* parameters)
   /* debug("#before inserting into PROCESS_LIST\n"); */ 
   thread_current()->pid = plist_insert( &PROCESS_LIST,&temp );
   /* debug("#after inserting into PROCESS_LIST\n"); */
+  process_print_list();
+  parameters->par_id = thread_current()->pid;
 
   /* Check if list was full, we do not allow more than LIST_SIZE processes to run concurrently */
   if(thread_current()->pid == -1)
     {
       success = false;
-      parameters->load = false;
+      //parameters->load = false;
       debug("# ERROR: System-wide file list was full, killing thread\n");
     }
   
@@ -222,7 +215,7 @@ start_process (struct parameters_to_start_process* parameters)
     /* dump_stack ( PHYS_BASE + 15, PHYS_BASE - if_.esp + 16 ); */
   }
   
-  debug("# %s#%d: start_process(\"%s\") DONE\n",
+  debug("%s#%d: start_process(\"%s\") DONE\n",
         thread_current()->name,
         thread_current()->tid,
         parameters->command_line);
@@ -269,37 +262,47 @@ process_wait (int child_id)
   struct thread *cur = thread_current ();
   int pid = cur->pid;
   
-  debug("# %s#%d: process_wait(%d) ENTERED\n",
+  struct pinfos* wookie = plist_find(p,child_id);
+  
+  debug("%s#%d: process_wait(%d) ENTERED\n",
         cur->name, cur->tid, child_id);
   
   /* Yes! You need to do something good here ! */
   /* is this really our child ? */
   /* very bettifull kode  */
+  
 
-  lock_acquire(&p->phatlock);
-  if ( ( p->content[child_id] == NULL )          /* Guard ourselves */
-       ||
-       (!p->content[child_id]->parent_alive)    /* This isn't our child */
-       || 
-       (p->content[child_id]->parent_id != pid) /* We're not the parent*/
-       || 
-       (p->content[child_id]->garbage) ) 
-    {
-      lock_release(&p->phatlock);
-      return status;
-    }
+  /* lock_acquire(&p->phatlock); */
+  /* if ( ( p->content[child_id] == NULL )          /\* Guard ourselves *\/ */
+  /*      || */
+  /*      (!p->content[child_id]->parent_alive)    /\* This isn't our child *\/ */
+  /*      ||  */
+  /*      (p->content[child_id]->parent_id != pid) /\* We're not the parent*\/ */
+  /*      ||  */
+  /*      (p->content[child_id]->garbage) )  */
+  /*   { */
+  /*     lock_release(&p->phatlock); */
+  /*     return status; */
+  /*   } */
 
-  lock_release(&p->phatlock);
+  /* lock_release(&p->phatlock); */
  
   /* wait for our child to die >:) */
-  sema_down(&p->content[child_id]->exit_status_available);
+  //  if (wookie != NULL )
+  // {
+      //      printf("waiting for child id: %d\n", child_id);
+      if( plist_is_child(p, child_id, pid) )
+	{
+	  sema_down(&p->content[child_id]->exit_status_available);
+	  status = plist_get_status(p,child_id);
+	  plist_remove(p, child_id);
+	}
+      //      p->content[child_id]->garbage = true;
+	  //   }
 
-  status = plist_get_status(p,child_id);
-  p->content[child_id]->garbage = true;
-
-  debug("# %s#%d: process_wait(%d) RETURNS %d\n",
+  debug("%s#%d: process_wait(%d) RETURNS %d\n",
         cur->name, cur->tid, child_id, status);
-  
+ 
   return status;
 }
 
@@ -322,11 +325,11 @@ process_cleanup (void)
   struct plist*   p   = &PROCESS_LIST;
   uint32_t*       pd  = cur->pagedir;
   int             pid = cur->pid;
-  printf("###pid: %d\n", pid);
+  //  printf("###pid: %d\n", pid);
   int             status = plist_get_status(p, pid);
   
   
-  debug("# %s#%d: process_cleanup() ENTERED\n", cur->name, cur->tid);
+  debug("%s#%d: process_cleanup() ENTERED\n", cur->name, cur->tid);
   
   /* Later tests DEPEND on this output to work correct. You will have
    * to find the actual exit status in your process list. It is
@@ -346,12 +349,13 @@ process_cleanup (void)
   if ( pid != -1 ) /* How to deal with threads that are not processes? */
     {
       /* Let parent process know we're done */  
-      sema_up(&p->content[pid]->exit_status_available);
 
       plist_for_each(p,&update_parent, pid);
+      sema_up(&p->content[pid]->exit_status_available);
       plist_remove_if(p,&is_candidate, pid);
+      
     }
-
+  //  process_print_list();
   printf("%s: exit(%d)\n", thread_name(), status);
 
   /* Destroy the current process's page directory and switch back
@@ -369,7 +373,7 @@ process_cleanup (void)
       pagedir_activate (NULL);
       pagedir_destroy (pd);
     }  
-  debug("# %s#%d: process_cleanup() DONE with status %d\n",
+  debug("%s#%d: process_cleanup() DONE with status %d\n",
         cur->name, cur->tid, status);
 }
 

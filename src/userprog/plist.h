@@ -58,6 +58,7 @@ value_p  plist_find       (struct plist*, int);
 value_p  plist_remove     (struct plist*, int);
 bool     plist_alive      (struct plist*, int);
 int      plist_get_status (struct plist*, int);
+bool     plist_is_child   (struct plist*, int, int);
 
 
 void     plist_for_each  (struct plist*, void (*exec)(int,value_p,int), int);
@@ -66,6 +67,8 @@ void     plist_remove_if (struct plist*, bool (*cond)(int,value_p,int), int);
 
 bool is_candidate(int, value_p, int);
 void update_parent(int, value_p, int);
+void print_list(struct plist*);
+void set_exit_status(struct plist*, int, int);
 
 
 #endif

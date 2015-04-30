@@ -116,6 +116,22 @@ plist_get_status(struct plist* m, int i)
   return status;
 }
 
+bool
+plist_is_child(struct plist* m, int child, int parent)
+{
+  lock_acquire(&m->phatlock);
+  bool result;
+  if ( m->content[child] == NULL )
+    result = false;
+  else if( m->content[child]->parent_id == parent && m->content[child]->parent_alive )
+    result = true;
+  else
+    result = false;
+
+  lock_release(&m->phatlock);
+
+  return result;
+}
 
 void
 plist_for_each(struct plist* m, void (*exec)(int,value_p,int), int aux)
@@ -175,6 +191,39 @@ update_parent(int i, value_p p, int aux)
 
   if( i == aux )
     p->alive = false;
+}
+
+void
+print_list(struct plist* p)
+{
+  lock_acquire(&p->phatlock);
+
+  int i;
+
+  printf("# TOP\n");
+  printf("PID\tPARENTID\tALIVE\tPARENT_ALIVE\tEXIT_STATUS\tNAME\n");
+    for(i = 0; i < LIST_SIZE; ++i)
+      {
+	if(p->content[i] == NULL)
+	  continue;
+	
+	printf("%d\t%d\t\t%d\t%d\t\t%d\t\t%s\n",
+	       i, 
+	       p->content[i]->parent_id, 
+	       p->content[i]->alive,
+	       p->content[i]->parent_alive,
+	       p->content[i]->exit_status,
+	       p->content[i]->name );
+      }
+    lock_release(&p->phatlock);
+}
+
+void
+set_exit_status(struct plist* p, int status, int pid)
+{
+  lock_acquire(&p->phatlock);
+  p->content[pid]->exit_status = status;
+  lock_release(&p->phatlock);
 }
 
 /*
