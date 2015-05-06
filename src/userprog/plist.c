@@ -22,12 +22,10 @@ plist_init(struct plist* m)
 key_t
 plist_insert(struct plist* m, value_p t)
 {
-  lock_acquire(&m->phatlock); /* LOCK */
-
-  unsigned i;
-  
+  unsigned i;  
   for(i = 0; i < LIST_SIZE; ++i)
     {
+      lock_acquire(&m->phatlock); /* LOCK */
       if(m->content[i] == NULL)
 	{
 	  //allocate memory for the struct (never cast return of malloc in c I learnt from stackoverflow.com)
@@ -40,15 +38,15 @@ plist_insert(struct plist* m, value_p t)
 	  m->content[i]->alive = t->alive;
 	  m->content[i]->parent_alive = t->parent_alive;
 	  m->content[i]->exit_status = t->exit_status;
-	  m->content[i]->garbage = t->garbage;
 
 	  m->content[i]->exit_status_available = t->exit_status_available;
 	  sema_init(&m->content[i]->exit_status_available, 0 );
 	  lock_release(&m->phatlock); /* LOCK */
 	  return i;
 	}
+      lock_release(&m->phatlock); /* LOCK */
     }
-  lock_release(&m->phatlock); /* LOCK */
+ 
   return -1;
 }
 
@@ -120,6 +118,7 @@ bool
 plist_is_child(struct plist* m, int child, int parent)
 {
   lock_acquire(&m->phatlock);
+  //printf("child id: %d, parent id: %d\n", child, parent);
   bool result;
   if ( m->content[child] == NULL )
     result = false;
@@ -129,6 +128,8 @@ plist_is_child(struct plist* m, int child, int parent)
     result = false;
 
   lock_release(&m->phatlock);
+  
+  //  printf("child id: %d, parent id: %d after release\n", child, parent);
 
   return result;
 }
@@ -150,7 +151,6 @@ plist_for_each(struct plist* m, void (*exec)(int,value_p,int), int aux)
 void
 plist_remove_if(struct plist* m, bool (*cond)(int,value_p,int), int aux)
 {
- 
   unsigned i;
   for(i = 0; i < LIST_SIZE; ++i)
     {
@@ -183,13 +183,12 @@ is_candidate(int i, value_p p, int aux)
 void
 update_parent(int i, value_p p, int aux)
 {
-  if( p->parent_id == aux )
+   if( p->parent_id == aux )
     p->parent_alive = false;
   
-  if( !(p->alive && p->parent_alive) )
-    p->garbage = true;
-
-  if( i == aux )
+  //  if( !(p->alive && p->parent_alive) )
+  //    p->garbage = true;
+   if( i == aux )
     p->alive = false;
 }
 

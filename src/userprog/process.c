@@ -46,12 +46,6 @@ void process_exit(int status)
   int pid = thread_current()->pid;
 
   set_exit_status(p, status, pid);
-
-  //  bool parent_alive = p->content[pid]->parent_alive;
-  //  if(p->content[pid] == NULL)
-  //    printf("### p->content[pid] IS NULL!!!\n");
-  //  p->content[pid]->exit_status = status;
-  //  p->content[pid]->alive = false;
 }
 
 /* Print a list of all running processes. The list shall include all
@@ -69,13 +63,6 @@ struct parameters_to_start_process
   struct semaphore sema;
   bool load;
   int par_id;
-  /*
-   *  struct semaphore semaphore;
-   *  do sema_init @ process_execute()
-   *  do sema_down @ process_execute()
-   *  do sema_up   @ start_process() after validating success in set_up_main_stack
-   *  maybe store a bool in this struct to use in parent process afterwards?
-   */
 };
 
 static void
@@ -116,15 +103,19 @@ process_execute (const char *command_line)
 
 
   strlcpy_first_word (debug_name, command_line, 64);
-  
+
+      
   /* SCHEDULES function `start_process' to run (LATER) */
   thread_id = thread_create (debug_name, PRI_DEFAULT,
                              (thread_func*)start_process, &arguments);
   
   /* If thread_create was successful, wait for child process */
+
   if(thread_id != -1)
     {
+      //      printf("before sema up proc exefh\n");
       sema_down(&arguments.sema);
+      //printf("after semadown process_execute\n");
       process_id = arguments.par_id;
     }
   /* is not really the parent id anymore lol just convenient */
@@ -145,7 +136,7 @@ process_execute (const char *command_line)
         command_line, process_id);
 
   /* Check if child process was successful */
-  if(!&arguments.load)
+  if(!arguments.load)
     process_id = -1;
 
   /* MUST be -1 if `load' in `start_process' return false */
@@ -174,6 +165,7 @@ start_process (struct parameters_to_start_process* parameters)
   if_.cs = SEL_UCSEG;
   if_.eflags = FLAG_IF | FLAG_MBS;
 
+
   success = load (file_name, &if_.eip, &if_.esp);
 
   parameters->load = success;
@@ -191,20 +183,18 @@ start_process (struct parameters_to_start_process* parameters)
   temp.name = thread_current()->name;
   temp.alive = true;
   temp.parent_alive = true;
-  temp.garbage = false;
-  
 
   /* debug("#before inserting into PROCESS_LIST\n"); */ 
   thread_current()->pid = plist_insert( &PROCESS_LIST,&temp );
   /* debug("#after inserting into PROCESS_LIST\n"); */
-  process_print_list();
+  
   parameters->par_id = thread_current()->pid;
 
   /* Check if list was full, we do not allow more than LIST_SIZE processes to run concurrently */
   if(thread_current()->pid == -1)
     {
       success = false;
-      //parameters->load = false;
+      parameters->load = false;
       debug("# ERROR: System-wide file list was full, killing thread\n");
     }
   
@@ -230,6 +220,7 @@ start_process (struct parameters_to_start_process* parameters)
   if ( ! success )
   {
     sema_up(&parameters->sema);
+    // printf("after semaup startproc\n");
     thread_exit ();
   }
   
@@ -241,6 +232,7 @@ start_process (struct parameters_to_start_process* parameters)
 
   /* Allow parent process to continue */
   sema_up(&parameters->sema);
+  //printf("after sema up start proc\n");
   asm volatile ("movl %0, %%esp; jmp intr_exit" : : "g" (&if_) : "memory");
   NOT_REACHED ();
 }
@@ -255,50 +247,27 @@ start_process (struct parameters_to_start_process* parameters)
    This function will be implemented last, after a communication
    mechanism between parent and child is established. */
 int
-process_wait (int child_id) 
+process_wait (int child_id)
 {
   struct plist* p = &PROCESS_LIST;
   int status = -1;
   struct thread *cur = thread_current ();
   int pid = cur->pid;
   
-  struct pinfos* wookie = plist_find(p,child_id);
-  
+    
   debug("%s#%d: process_wait(%d) ENTERED\n",
         cur->name, cur->tid, child_id);
   
   /* Yes! You need to do something good here ! */
   /* is this really our child ? */
-  /* very bettifull kode  */
+    
+  if( plist_is_child(p, child_id, pid) )
+    {
+      sema_down(&p->content[child_id]->exit_status_available);
+      status = plist_get_status(p,child_id);
+      plist_remove(p, child_id);
+    }
   
-
-  /* lock_acquire(&p->phatlock); */
-  /* if ( ( p->content[child_id] == NULL )          /\* Guard ourselves *\/ */
-  /*      || */
-  /*      (!p->content[child_id]->parent_alive)    /\* This isn't our child *\/ */
-  /*      ||  */
-  /*      (p->content[child_id]->parent_id != pid) /\* We're not the parent*\/ */
-  /*      ||  */
-  /*      (p->content[child_id]->garbage) )  */
-  /*   { */
-  /*     lock_release(&p->phatlock); */
-  /*     return status; */
-  /*   } */
-
-  /* lock_release(&p->phatlock); */
- 
-  /* wait for our child to die >:) */
-  //  if (wookie != NULL )
-  // {
-      //      printf("waiting for child id: %d\n", child_id);
-      if( plist_is_child(p, child_id, pid) )
-	{
-	  sema_down(&p->content[child_id]->exit_status_available);
-	  status = plist_get_status(p,child_id);
-	  plist_remove(p, child_id);
-	}
-      //      p->content[child_id]->garbage = true;
-	  //   }
 
   debug("%s#%d: process_wait(%d) RETURNS %d\n",
         cur->name, cur->tid, child_id, status);
@@ -325,7 +294,6 @@ process_cleanup (void)
   struct plist*   p   = &PROCESS_LIST;
   uint32_t*       pd  = cur->pagedir;
   int             pid = cur->pid;
-  //  printf("###pid: %d\n", pid);
   int             status = plist_get_status(p, pid);
   
   
@@ -338,25 +306,22 @@ process_cleanup (void)
    * that may sometimes poweroff as soon as process_wait() returns,
    * possibly before the prontf is completed.)
    */
-  
 
-  /* Let parent process know that exit status is available */
-  /* This child wont be removed from the process list if parent is waiting */
+  /* Don't move this ... wtf */
+  printf("%s: exit(%d)\n", thread_name(), status);
 
   /* Clear the file list */
   map_clear(&(cur->file_list));
 
-  if ( pid != -1 ) /* How to deal with threads that are not processes? */
+  if ( pid != -1 ) /* How to deal with threads that are not processes! */
     {
       /* Let parent process know we're done */  
-
       plist_for_each(p,&update_parent, pid);
       sema_up(&p->content[pid]->exit_status_available);
       plist_remove_if(p,&is_candidate, pid);
       
     }
-  //  process_print_list();
-  printf("%s: exit(%d)\n", thread_name(), status);
+  //printf("%s: pid: %d\n", thread_name(), pid);
 
   /* Destroy the current process's page directory and switch back
      to the kernel-only page directory. */
@@ -372,7 +337,8 @@ process_cleanup (void)
       cur->pagedir = NULL;
       pagedir_activate (NULL);
       pagedir_destroy (pd);
-    }  
+    }
+  //  process_print_list();
   debug("%s#%d: process_cleanup() DONE with status %d\n",
         cur->name, cur->tid, status);
 }
@@ -394,25 +360,13 @@ process_activate (void)
 }
 
 /*
- * Beware: Seg fault beyond this point.
+ * Code used when setting up the process stack
  */
 
 struct main_args
 {
-  /* Hint: When try to interpret C-declarations, read from right to
-   * left! It is often easier to get the correct interpretation,
-   * altough it does not always work. */
-
-  /* Variable "ret" that stores address (*ret) to a function taking no
-   * parameters (void) and returning nothing. */
   void (*ret)(void);
-
-  /* Just a normal integer. */
   int argc;
-  
-  /* Variable "argv" that stores address to an address storing char.
-   * That is: argv is a pointer to char*
-   */
   char** argv;
 };
 

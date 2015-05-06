@@ -37,8 +37,8 @@ struct pinfos;
 typedef struct pinfos* value_p;
 typedef int key_t;
 
+
 struct pinfos {
-  bool  garbage; //the fuck is this?
   int   parent_id; // I am the spawn of this fellow
   int   exit_status; // this is how I died
   char* name;

@@ -315,11 +315,13 @@ thread_exit (void)
 #ifdef USERPROG
   process_cleanup ();
 #endif
-
+  
   /* Just set our status to dying and schedule another process.
      We will be destroyed during the call to schedule_tail(). */
   intr_disable ();
+  
   thread_current ()->status = THREAD_DYING;
+  
   schedule ();
   NOT_REACHED ();
 }
@@ -550,7 +552,9 @@ schedule (void)
 
   if (cur != next)
     prev = switch_threads (cur, next);
-  schedule_tail (prev); 
+  schedule_tail (prev);
+  
+  //printf("I AM WOMAN, HEAR ME SMASH %s\n",cur->name);
 }
 
 /* Returns a tid to use for a new thread. */

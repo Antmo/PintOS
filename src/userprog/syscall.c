@@ -141,7 +141,7 @@ sys_wait(int pid, struct intr_frame* f)
 void
 sys_exec(const char* command_line, struct intr_frame* f)
 {
-  f->eax = process_execute(command_line);
+    f->eax = process_execute(command_line);
 }
 
 void
