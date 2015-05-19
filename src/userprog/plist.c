@@ -22,7 +22,7 @@ plist_init(struct plist* m)
 key_t
 plist_insert(struct plist* m, value_p t)
 {
-  unsigned i;  
+  unsigned i;
   for(i = 0; i < LIST_SIZE; ++i)
     {
       lock_acquire(&m->phatlock); /* LOCK */

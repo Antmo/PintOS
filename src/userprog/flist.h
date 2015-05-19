@@ -37,7 +37,7 @@
 
 typedef struct file* value_t;
 
-typedef int key_t;
+//typedef int key_t;
 
 
 struct map {
@@ -45,7 +45,7 @@ struct map {
 };
 
 void     map_init      (struct map*);
-key_t    map_insert    (struct map*, value_t);
+int      map_insert    (struct map*, value_t);
 value_t  map_find      (struct map*, int);
 value_t  map_remove    (struct map*, int);
 void     map_for_each  (struct map*, void (*exec)(int,value_t,int), int);

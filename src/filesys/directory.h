@@ -14,6 +14,7 @@
 struct inode;
 
 /* Opening and closing directories. */
+void dir_init(void);
 bool dir_create (disk_sector_t sector, size_t entry_cnt);
 struct dir *dir_open (struct inode *);
 struct dir *dir_open_root (void);

@@ -7,7 +7,7 @@
 #ifdef FILESYS
 #include "filesys/file.h"
 #endif
-
+
 /* Element type.
 
    This must be an unsigned integer type at least as wide as int.
@@ -16,7 +16,9 @@
    If bit 0 in an element represents bit K in the bitmap,
    then bit 1 in the element represents bit K+1 in the bitmap,
    and so on. */
-typedef unsigned long elem_type;
+
+/* OBS! */
+/* Moved declarations of the bitmap struct and some typedef's to bitmap.h! */
 
 /* Number of bits in an element. */
 #define ELEM_BITS (sizeof (elem_type) * CHAR_BIT)
@@ -24,11 +26,6 @@ typedef unsigned long elem_type;
 /* From the outside, a bitmap is an array of bits.  From the
    inside, it's an array of elem_type (defined above) that
    simulates an array of bits. */
-struct bitmap
-  {
-    size_t bit_cnt;     /* Number of bits. */
-    elem_type *bits;    /* Elements that represent bits. */
-  };
 
 /* Returns the index of the element that contains the bit
    numbered BIT_IDX. */
@@ -68,7 +65,7 @@ last_mask (const struct bitmap *b)
   int last_bits = b->bit_cnt % ELEM_BITS;
   return last_bits ? ((elem_type) 1 << last_bits) - 1 : (elem_type) -1;
 }
-
+
 /* Creation and destruction. */
 
 /* Initializes B to be a bitmap of BIT_CNT bits
@@ -86,7 +83,7 @@ bitmap_create (size_t bit_cnt)
       if (b->bits != NULL || bit_cnt == 0)
         {
           bitmap_set_all (b, false);
-          return b;
+	  return b;
         }
       free (b);
     }
@@ -129,7 +126,7 @@ bitmap_destroy (struct bitmap *b)
       free (b);
     }
 }
-
+
 /* Bitmap size. */
 
 /* Returns the number of bits in B. */
@@ -325,7 +322,7 @@ bitmap_scan_and_flip (struct bitmap *b, size_t start, size_t cnt, bool value)
     bitmap_set_multiple (b, idx, cnt, !value);
   return idx;
 }
-
+
 /* File input and output. */
 
 #ifdef FILESYS
@@ -360,7 +357,7 @@ bitmap_write (const struct bitmap *b, struct file *file)
   return file_write_at (file, b->bits, size, 0) == size;
 }
 #endif /* FILESYS */
-
+
 /* Debugging. */
 
 /* Dumps the contents of B to the console as hexadecimal. */

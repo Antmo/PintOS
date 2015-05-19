@@ -15,7 +15,7 @@ map_init(struct map* m)
   return;
 }
 
-key_t
+int
 map_insert(struct map* m, value_t t)
 {
   unsigned i;

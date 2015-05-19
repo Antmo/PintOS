@@ -5,12 +5,15 @@
 #include "filesys/filesys.h"
 #include "filesys/inode.h"
 #include "threads/malloc.h"
+#include "threads/synch.h"
 
 /* A directory. */
 struct dir 
   {
     struct inode *inode;                /* Backing store. */
     off_t pos;                          /* Current position. */
+
+    // struct lock dir_lock;         /* Directory lock */
   };
 
 /* A single directory entry. */
@@ -19,10 +22,20 @@ struct dir_entry
     disk_sector_t inode_sector;         /* Sector number of header. */
     char name[NAME_MAX + 1];            /* Null terminated file name. */
     bool in_use;                        /* In use or free? */
+    
   };
+
+struct lock dir_lock;         /* Dir entry lock */
 
 /* Creates a directory with space for ENTRY_CNT entries in the
    given SECTOR.  Returns true if successful, false on failure. */
+void
+dir_init(void)
+{
+  lock_init(&dir_lock);
+}
+
+
 bool
 dir_create (disk_sector_t sector, size_t entry_cnt) 
 {
@@ -34,17 +47,20 @@ dir_create (disk_sector_t sector, size_t entry_cnt)
 struct dir *
 dir_open (struct inode *inode) 
 {
+  //  lock_acquire(&dir_lock);
   struct dir *dir = calloc (1, sizeof *dir);
   if (inode != NULL && dir != NULL)
     {
       dir->inode = inode;
       dir->pos = 0;
+      //      lock_release(&dir_lock);
       return dir;
     }
   else
     {
       inode_close (inode);
       free (dir);
+      //      lock_release(&dir_lock);
       return NULL; 
     }
 }
@@ -69,18 +85,29 @@ dir_reopen (struct dir *dir)
 void
 dir_close (struct dir *dir) 
 {
+  /* LOCK */
+  //  lock_acquire(&dir_lock);
+
   if (dir != NULL)
     {
       inode_close (dir->inode);
       free (dir);
     }
+
+  /* LOCK */
+  //  lock_release(&dir_lock);
 }
 
 /* Returns the inode encapsulated by DIR. */
 struct inode *
 dir_get_inode (struct dir *dir) 
 {
-  return dir->inode;
+  /* LOCK */
+  //  lock_acquire(&dir_lock);
+  struct inode* temp = dir->inode;
+  /* LOCK */
+  //  lock_release(&dir_lock);
+  return temp;
 }
 
 /* Searches DIR for a file with the given NAME.
@@ -94,7 +121,8 @@ lookup (const struct dir *dir, const char *name,
 {
   struct dir_entry e;
   size_t ofs;
-  
+  /* LOCK */
+  //  lock_acquire(&dir_lock);
   ASSERT (dir != NULL);
   ASSERT (name != NULL);
 
@@ -106,8 +134,10 @@ lookup (const struct dir *dir, const char *name,
           *ep = e;
         if (ofsp != NULL)
           *ofsp = ofs;
+	//	lock_release(&dir_lock);
         return true;
       }
+  //  lock_release(&dir_lock);
   return false;
 }
 
@@ -144,7 +174,7 @@ dir_add (struct dir *dir, const char *name, disk_sector_t inode_sector)
   struct dir_entry e;
   off_t ofs;
   bool success = false;
-  
+ 
   ASSERT (dir != NULL);
   ASSERT (name != NULL);
 
@@ -152,6 +182,7 @@ dir_add (struct dir *dir, const char *name, disk_sector_t inode_sector)
   if (*name == '\0' || strlen (name) > NAME_MAX)
     return false;
 
+  // lock_acquire(&dir->dir_lock);
   /* Check that NAME is not in use. */
   if (lookup (dir, name, NULL, NULL))
     goto done;
@@ -175,6 +206,7 @@ dir_add (struct dir *dir, const char *name, disk_sector_t inode_sector)
   success = inode_write_at (dir->inode, &e, sizeof e, ofs) == sizeof e;
 
  done:
+  //lock_release(&dir->dir_lock);
   return success;
 }
 
@@ -189,6 +221,7 @@ dir_remove (struct dir *dir, const char *name)
   bool success = false;
   off_t ofs;
 
+  //  lock_acquire(&dir->dir_lock);
   ASSERT (dir != NULL);
   ASSERT (name != NULL);
 
@@ -212,6 +245,7 @@ dir_remove (struct dir *dir, const char *name)
 
  done:
   inode_close (inode);
+  //  lock_release(&dir->dir_lock);
   return success;
 }
 
@@ -222,6 +256,7 @@ bool
 dir_readdir (struct dir *dir, char name[NAME_MAX + 1])
 {
   struct dir_entry e;
+  //  lock_acquire(&dir_lock);
 
   while (inode_read_at (dir->inode, &e, sizeof e, dir->pos) == sizeof e) 
     {
@@ -229,8 +264,10 @@ dir_readdir (struct dir *dir, char name[NAME_MAX + 1])
       if (e.in_use)
         {
           strlcpy (name, e.name, NAME_MAX + 1);
+	  //	  lock_release(&dir_lock);
           return true;
         } 
     }
+  //  lock_release(&dir_lock);
   return false;
 }
