@@ -34,7 +34,7 @@ free_map_allocate (size_t cnt, disk_sector_t *sectorp)
 {
   disk_sector_t sector;
   /* ACQUIRE LOCK */
-  //lock_acquire(&free_map_lock);
+  //  lock_acquire(&free_map_lock);
 
   sector = bitmap_scan_and_flip (free_map, 0, cnt, false);
   if (sector != BITMAP_ERROR
@@ -90,12 +90,12 @@ void
 free_map_close (void) 
 {
   /* ACQUIRE LOCK */
-  //  lock_acquire(&free_map->bm_lock);
+  lock_acquire(&free_map_lock);
 
   file_close (free_map_file);
 
   /* RELEASE LOCK */
-  //  lock_release(&free_map->bm_lock);
+  lock_release(&free_map_lock);
 }
 
 /* Creates a new free map file on disk and writes the free map to
