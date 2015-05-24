@@ -264,10 +264,10 @@ inode_read_at (struct inode *inode, void *buffer_, off_t size, off_t offset)
   
   lock_acquire(&inode->w_lock);
   lock_acquire(&inode->cnt_lock);
+
   if(++inode->readers == 1)
-    {
-      sema_down(&inode->access);
-    }
+    sema_down(&inode->access);
+
   lock_release(&inode->cnt_lock);
   lock_release(&inode->w_lock);
 
@@ -318,7 +318,7 @@ inode_read_at (struct inode *inode, void *buffer_, off_t size, off_t offset)
 
   //remove reader
   lock_acquire(&inode->cnt_lock);
-  if(--inode->readers == 0)
+  if(--inode->readers == 0) /* Only allow writes if there are no readers in queue */
    {
      sema_up(&inode->access);
      //     lock_release(&inode->r_lock);

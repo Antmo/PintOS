@@ -4,6 +4,9 @@
 #include <stdbool.h>
 #include <stdint.h>
 
+bool verify_variable_length(char* start);
+bool verify_fix_length(void* start, int length);
+
 uint32_t *pagedir_create (void);
 void pagedir_destroy (uint32_t *pd);
 bool pagedir_set_page (uint32_t *pd, void *upage, void *kpage, bool rw);

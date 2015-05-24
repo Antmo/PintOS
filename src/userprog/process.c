@@ -116,7 +116,10 @@ process_execute (const char *command_line)
       //      printf("before sema up proc exefh\n");
       sema_down(&arguments.sema);
       //printf("after semadown process_execute\n");
-      process_id = arguments.par_id;
+      if(arguments.load)
+	process_id = arguments.par_id;
+      else
+	process_id = -1;
     }
   /* is not really the parent id anymore lol just convenient */
   
@@ -136,8 +139,8 @@ process_execute (const char *command_line)
         command_line, process_id);
 
   /* Check if child process was successful */
-  if(!arguments.load)
-    process_id = -1;
+  //  if(!arguments.load)
+  //    process_id = -1;
 
   /* MUST be -1 if `load' in `start_process' return false */
   return process_id;
@@ -204,7 +207,9 @@ start_process (struct parameters_to_start_process* parameters)
 
     /* dump_stack ( PHYS_BASE + 15, PHYS_BASE - if_.esp + 16 ); */
   }
-  
+  /* Might be something wrong here, 
+     if threads execute in a specific order 
+     we crash in exec-corrupt / exec missing */  
   debug("%s#%d: start_process(\"%s\") DONE\n",
         thread_current()->name,
         thread_current()->tid,
@@ -260,7 +265,8 @@ process_wait (int child_id)
   
   /* Yes! You need to do something good here ! */
   /* is this really our child ? */
-    
+  if( p->content[child_id] == NULL ) /* trying to fix wait twice ...*/
+    return status;
   if( plist_is_child(p, child_id, pid) )
     {
       sema_down(&p->content[child_id]->exit_status_available);

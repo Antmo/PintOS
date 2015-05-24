@@ -5,9 +5,60 @@
 #include "threads/init.h"
 #include "threads/pte.h"
 #include "threads/palloc.h"
+#include "threads/thread.h"
+#include "threads/vaddr.h"
 
 static uint32_t *active_pd (void);
 static void invalidate_pagedir (uint32_t *);
+
+/* Kontrollera alla adresser från och med start till och inte med
+ * (start+length). */
+bool verify_fix_length(void* start, int length)
+{
+  // ADD YOUR CODE HERE
+  if( start == NULL || start >= PHYS_BASE )
+    return false;
+
+  void* iterator = start;
+  while ( pg_round_down(iterator) < start+length )
+    {
+      void* page = pagedir_get_page(thread_current()->pagedir,iterator);
+      if(page == NULL)
+	return false;
+
+      iterator+=PGSIZE;
+    }
+  
+  return true;
+}
+
+/* Kontrollera alla adresser från och med start till och med den
+ * adress som först innehåller ett noll-tecken, `\0'. (C-strängar
+ * lagras på detta sätt.) */
+bool verify_variable_length(char* start)
+{
+  // ADD YOUR CODE HERE
+  //  void* pagedir = thread_current()->pagedir;
+  void* page = pagedir_get_page(thread_current()->pagedir,pg_round_down(start));
+  char* iterator = start;
+
+  unsigned cnt = start - (unsigned)pg_round_down(start);
+
+  if (page == NULL) 
+    return false; 
+
+  while (*iterator++ != '\0')
+    {
+      if( ++cnt%PGSIZE == 0)
+	{
+	  page = pagedir_get_page(thread_current()->pagedir,iterator);
+	}
+      
+      if(page == NULL)
+	return false;
+    }
+  return true;
+}
 
 /* Creates a new page directory that has mappings for kernel
    virtual addresses, but none for user virtual addresses.

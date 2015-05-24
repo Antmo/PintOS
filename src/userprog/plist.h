@@ -44,6 +44,7 @@ struct pinfos {
   char* name;
   bool  alive; // I am beyond the realm of the living, or am I ?
   bool  parent_alive; // I am an orphan, or just a melodramatic kid ?
+  //  bool  ret_available;
   struct semaphore exit_status_available;
 };
 

@@ -13,6 +13,7 @@
 #include "userprog/pagedir.h"
 #include "userprog/process.h"
 #include "devices/input.h"
+#include "userprog/plist.h"
 
 static void syscall_handler (struct intr_frame *);
 
@@ -31,7 +32,7 @@ syscall_init (void)
    
    All system calls have a name such as SYS_READ defined as an enum
    type, see `lib/syscall-nr.h'. Use them instead of numbers.
- */
+*/
 const int argc[] = {
   /* basic calls */
   0, 1, 1, 1, 2, 1, 1, 1, 3, 3, 2, 1, 1, 
@@ -45,6 +46,27 @@ static void
 syscall_handler (struct intr_frame *f) 
 {
   int32_t* esp = (int32_t*)f->esp;
+
+  //  if(!verify_fix_length(esp, sizeof(esp)) || !is_user_vaddr(esp))
+  //    {
+      //      sys_exit(-1, f);
+      //      return;
+      
+  //    }
+
+  //  if(!verify_fix_length(esp, 4) || !verify_fix_length(esp+1, argc[*esp]*4))
+  //    process_exit(-1);
+
+  if(!verify_fix_length(esp, sizeof(esp)))
+    {
+      process_exit(-1);
+      thread_exit();
+    }
+  if(!verify_fix_length( esp+1, argc[*esp]*4 )) /* Magic ... actually exec missing fails without this ... */
+    {
+        process_exit(-1);
+        thread_exit();
+    }
   
   switch ( *esp ) {
   case SYS_HALT:
@@ -113,13 +135,9 @@ sys_exit(int status, struct intr_frame* f)
   /* get the current running thread */
   struct thread* tid = thread_current();
  
-  /* printf("# sys_exit() ENTERED\n"); */
-  /* printf("# exit_status: %d\n",status); */
-  /* printf("# this is the current running thread: %s\n",tid->name); */
-  
   /* close all open files in the open filelist */
   map_clear(&(tid->file_list));
-  
+
   f->eax = status;
 
   process_exit(status); /* Update process list */
@@ -135,12 +153,35 @@ sys_sleep(int millis)
 void
 sys_wait(int pid, struct intr_frame* f)
 {
-  f->eax = process_wait(pid);
+  if (plist_is_child(&PROCESS_LIST,pid,thread_current()->pid)) 
+    f->eax = process_wait(pid);
+  else
+    f->eax = -1;
+      /* && PROCESS_LIST.content[pid]->ret_available )*/
+  //  else
+  //    sys_exit(-1,f);
 }
 
 void
 sys_exec(const char* command_line, struct intr_frame* f)
 {
+  char* buf = command_line;
+  int i;
+
+  //  for(i = 0; i < sizeof(command_line); ++i)
+  //    {
+  //      if(buf == NULL || !is_user_vaddr(buf) || 
+  //	 pagedir_get_page(thread_current()->pagedir, buf) == NULL )
+  //	{
+  //	  process_exit(-1);
+  //	  thread_exit();
+  //	}
+  //      ++buf;
+  //    }
+
+  if(!verify_variable_length(command_line)) /* variable eller fixed?*/
+    sys_exit(-1, f);
+  else
     f->eax = process_execute(command_line);
 }
 
@@ -156,7 +197,37 @@ sys_plist(void)
 void
 sys_read(int fd, char *buffer, unsigned length, struct intr_frame* f)
 {
-  if (fd == STDOUT_FILENO)
+  //  if( !verify_fix_length(buffer,length) 
+  //      || is_kernel_vaddr(buffer) || is_kernel_vaddr(buffer + length) )
+  //    sys_exit(-1, f);
+
+  if(!verify_fix_length(buffer, sizeof(buffer)))
+    {
+      //    process_exit(-1);
+      //      thread_exit;
+      sys_exit(-1, f);
+    }
+
+  char* buf = buffer;
+  /* I don't know what I'm doing ...*/
+  int i;
+  for(i = 0; i < length; ++i)
+    {
+      if(buf == NULL || !is_user_vaddr(buf) || 
+	 pagedir_get_page(thread_current()->pagedir, buf) == NULL )
+	{
+	  process_exit(-1);
+	  thread_exit();
+	}
+      ++buf;
+    }
+  //  if(!is_user_vaddr(buffer+length-1))
+  //     sys_exit(-1,f);
+     
+  //  if(!is_user_vaddr(f+3))
+  //  sys_exit(-1,f); 
+     
+  if (fd == STDOUT_FILENO || fd == NULL)
     {
       f->eax = -1;
       return;
@@ -193,7 +264,12 @@ sys_read(int fd, char *buffer, unsigned length, struct intr_frame* f)
 void
 sys_write(int fd, const char *buffer, unsigned length, struct intr_frame* f)
 {
-  
+  if( !verify_fix_length(buffer, sizeof(buffer)) )
+    {
+      //      sys_exit(-1, f);
+      process_exit(-1);
+      thread_exit();
+    }
   if(fd == STDIN_FILENO /*|| buffer == NULL */) 
     {
       f->eax = -1;
@@ -213,14 +289,17 @@ sys_write(int fd, const char *buffer, unsigned length, struct intr_frame* f)
 	  return;
 	}
       f->eax = file_write( fp, buffer, length);
-     }
+    }
   
-   return;
+  return;
 }
 
 void
 sys_open(const char * filename, struct intr_frame* f)
 {
+  if(!verify_variable_length(filename))
+    sys_exit(-1, f);
+
   struct thread* ct = thread_current();
   struct file* fp = NULL;
   
@@ -243,7 +322,13 @@ sys_open(const char * filename, struct intr_frame* f)
 void
 sys_create(const char* filename, unsigned size, struct intr_frame * f)
 {
-  f->eax = filesys_create(filename,size);
+  if(filename == NULL)
+    sys_exit(-1, f);
+
+  if( !verify_variable_length(filename) )
+    sys_exit(-1, f);  
+  else
+    f->eax = filesys_create(filename,size);
 }
 
 void
@@ -252,16 +337,19 @@ sys_close(int fd)
   
   struct file* fp = map_find(&(thread_current()->file_list),fd);
   if ( fp != NULL )
-   {
-    filesys_close(fp);
-    map_remove(&(thread_current()->file_list),fd);
-   }
+    {
+      filesys_close(fp);
+      map_remove(&(thread_current()->file_list),fd);
+    }
 }
 
 void
 sys_remove(const char* filename, struct intr_frame* f)
 {
-  f->eax = filesys_remove(filename);
+  if(!verify_variable_length(filename))
+    sys_exit(-1, f);
+  else
+    f->eax = filesys_remove(filename);
 }
 
 void
@@ -269,7 +357,7 @@ sys_seek(int fd, unsigned position)
 {
   struct file* fp = map_find(&(thread_current()->file_list),fd);
   if ( fp != NULL )
-      file_seek(fp, position);
+    file_seek(fp, position);
 }
 
 void

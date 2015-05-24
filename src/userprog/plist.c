@@ -38,6 +38,7 @@ plist_insert(struct plist* m, value_p t)
 	  m->content[i]->alive = t->alive;
 	  m->content[i]->parent_alive = t->parent_alive;
 	  m->content[i]->exit_status = t->exit_status;
+	  //	  m->content[i]->ret_available = true;
 
 	  m->content[i]->exit_status_available = t->exit_status_available;
 	  sema_init(&m->content[i]->exit_status_available, 0 );
@@ -75,7 +76,7 @@ plist_remove(struct plist* m, int i)
       value_p temp = m->content[i];
       free(m->content[i]->name);
       free(m->content[i]);
-
+      //      m->content[i]->ret_available = false;
       m->content[i] = NULL;
 
       lock_release(&m->phatlock); /* LOCK */
@@ -89,6 +90,7 @@ plist_remove(struct plist* m, int i)
 bool
 plist_alive(struct plist* m, int i)
 {
+  //check i > LIST_SIZE ?
   lock_acquire(&m->phatlock); /* LOCK */
 
   if(m->content[i] != NULL)
@@ -120,12 +122,16 @@ plist_is_child(struct plist* m, int child, int parent)
   lock_acquire(&m->phatlock);
   //printf("child id: %d, parent id: %d\n", child, parent);
   bool result;
-  if ( m->content[child] == NULL )
+
+  if(child > LIST_SIZE)
+    result = false;
+  else if ( m->content[child] == NULL )
     result = false;
   else if( m->content[child]->parent_id == parent && m->content[child]->parent_alive )
     result = true;
   else
     result = false;
+  
 
   lock_release(&m->phatlock);
   
@@ -220,6 +226,7 @@ print_list(struct plist* p)
 void
 set_exit_status(struct plist* p, int status, int pid)
 {
+  //check pid < LIST_SIZE ?
   lock_acquire(&p->phatlock);
   p->content[pid]->exit_status = status;
   lock_release(&p->phatlock);
